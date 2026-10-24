@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: loki-backend
+  namespace: loki
+  labels:
+    app.kubernetes.io/name: loki-backend
+    app.kubernetes.io/part-of: observability
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: loki-backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: loki-backend
+        app.kubernetes.io/part-of: observability
+    spec:
+      serviceAccountName: loki
+      terminationGracePeriodSeconds: 300
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: loki-backend
+      containers:
+      - name: loki
+        image: docker.io/grafana/loki:3.5.5
+        imagePullPolicy: IfNotPresent
+        args:
+        - -target=backend
+        - -config.file=/etc/loki/loki.yaml
+        - -config.expand-env=true
+        ports:
+        - name: http
+          containerPort: 3100
+          protocol: TCP
+        - name: grpc
+          containerPort: 9095
+          protocol: TCP
+        - name: memberlist
+          containerPort: 7946
+          protocol: TCP
+        envFrom:
+        - secretRef:
+            name: loki-object-storage
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2Gi
+          limits:
+            cpu: 2
+            memory: 4Gi
+        startupProbe:
+          httpGet:
+            path: /ready
+            port: http
+          failureThreshold: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 6
+        volumeMounts:
+        - name: config
+          mountPath: /etc/loki
+          readOnly: true
+        - name: runtime
+          mountPath: /var/loki
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: config
+        configMap:
+          name: loki-config
+      - name: runtime
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki-backend
+  namespace: loki
+  labels:
+    app.kubernetes.io/name: loki-backend
+spec:
+  selector:
+    app.kubernetes.io/name: loki-backend
+  ports:
+  - name: http
+    port: 3100
+    targetPort: http
+  - name: grpc
+    port: 9095
+    targetPort: grpc

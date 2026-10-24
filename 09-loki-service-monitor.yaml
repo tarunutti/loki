@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: loki
+  namespace: loki
+  labels:
+    # Change this label to match the serviceMonitorSelector used by your Prometheus.
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames: ["loki"]
+  selector:
+    matchExpressions:
+    - key: app.kubernetes.io/name
+      operator: In
+      values: ["loki-write", "loki-read", "loki-backend"]
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s

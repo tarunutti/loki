@@ -1,0 +1,36 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: loki-alerts
+  namespace: loki
+  labels:
+    # Must match your Prometheus ruleSelector labels.
+    role: alert-rules
+spec:
+  groups:
+  - name: loki.availability
+    rules:
+    - alert: LokiTargetDown
+      expr: up{namespace="loki",service=~"loki-(write|read|backend)"} == 0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: Loki target is down
+        description: A Loki service target has been unavailable for more than 5 minutes.
+    - alert: LokiGatewayUnavailable
+      expr: kube_deployment_status_replicas_available{namespace="loki",deployment="loki-gateway"} < 1
+      for: 3m
+      labels:
+        severity: critical
+      annotations:
+        summary: Loki gateway has no available replicas
+        description: Log ingestion and querying through the gateway may be unavailable.
+    - alert: LokiPodsRestartingFrequently
+      expr: increase(kube_pod_container_status_restarts_total{namespace="loki"}[15m]) > 3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: Loki container restarting frequently
+        description: A Loki container restarted more than three times in 15 minutes.

@@ -1,0 +1,17 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: loki
+  namespace: loki
+  labels:
+    app.kubernetes.io/name: loki-gateway
+spec:
+  host: loki.apps.example.com
+  to:
+    kind: Service
+    name: loki-gateway
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
